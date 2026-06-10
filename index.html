@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>特價商品追蹤器</title>
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f8fa;
+        color: #1a1a2e;
+        min-height: 100vh;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f0f0f0;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const BRAND_COLOR = { uniqlo: "#FF0000", net: "#0052A5" };
+      const BRAND_LABEL = { uniqlo: "UNIQLO", net: "NET" };
+
+      /* ── tiny helpers ── */
+      const fmt = (n) => `NT$ ${n.toLocaleString()}`;
+      const saved = (item) => item.originalPrice - item.salePrice;
+
+      /* ── ProductCard ── */
+      function ProductCard({ item, isFav, onToggleFav }) {
+        const [imgErr, setImgErr] = useState(false);
+        const brandColor = BRAND_COLOR[item.brand] || "#555";
+        const visibleColors = item.colors.slice(0, 4);
+        const extraColors = item.colors.length - 4;
+
+        const cardStyle = {
+          background: "#fff",
+          borderRadius: 12,
+          overflow: "hidden",
+          boxShadow: "0 1px 4px rgba(0,0,0,.08)",
+          display: "flex",
+          flexDirection: "column",
+          transition: "box-shadow .2s",
+          cursor: "pointer",
+          position: "relative",
+        };
+
+        return (
+          <div
+            style={cardStyle}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.14)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,.08)")
+            }
+            onClick={() => window.open(item.productUrl, "_blank", "noopener")}
+          >
+            {/* discount badge */}
+            <div
+              style={{
+                position: "absolute",
+                top: 10,
+                left: 10,
+                background: "#e53e3e",
+                color: "#fff",
+                borderRadius: 6,
+                padding: "2px 8px",
+                fontSize: 12,
+                fontWeight: 700,
+                zIndex: 1,
+              }}
+            >
+              -{item.discount}%
+            </div>
+
+            {/* fav button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFav(item.productUrl);
+              }}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                background: "rgba(255,255,255,.85)",
+                border: "none",
+                borderRadius: "50%",
+                width: 32,
+                height: 32,
+                cursor: "pointer",
+                fontSize: 18,
+                lineHeight: "32px",
+                textAlign: "center",
+                zIndex: 1,
+                transition: "transform .15s",
+              }}
+              title={isFav ? "取消收藏" : "加入收藏"}
+            >
+              {isFav ? "♥" : "♡"}
+            </button>
+
+            {/* image */}
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: "1 / 1",
+                background: "#f0f0f0",
+                overflow: "hidden",
+              }}
+            >
+              {imgErr ? (
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: brandColor,
+                    fontWeight: 700,
+                    fontSize: 20,
+                  }}
+                >
+                  {BRAND_LABEL[item.brand] || item.brand.toUpperCase()}
+                </div>
+              ) : (
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImgErr(true)}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              )}
+            </div>
+
+            {/* body */}
+            <div
+              style={{
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                flex: 1,
+              }}
+            >
+              {/* brand + category */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    background: brandColor,
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    borderRadius: 4,
+                    padding: "1px 6px",
+                  }}
+                >
+                  {BRAND_LABEL[item.brand] || item.brand.toUpperCase()}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#888",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {item.category}
+                </span>
+              </div>
+
+              {/* name */}
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: 14,
+                  lineHeight: 1.4,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {item.name}
+              </div>
+
+              {/* price */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    textDecoration: "line-through",
+                    color: "#aaa",
+                    fontSize: 12,
+                  }}
+                >
+                  {fmt(item.originalPrice)}
+                </span>
+                <span
+                  style={{ color: "#e53e3e", fontWeight: 700, fontSize: 16 }}
+                >
+                  {fmt(item.salePrice)}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "#38a169" }}>
+                省下 {fmt(saved(item))}
+              </div>
+
+              {/* sizes */}
+              {item.sizes && item.sizes.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    marginTop: 2,
+                  }}
+                >
+                  {item.sizes.map((s) => (
+                    <span
+                      key={s}
+                      style={{
+                        background: "#f0f0f0",
+                        color: "#555",
+                        fontSize: 10,
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                      }}
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* colors */}
+              {item.colors && item.colors.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {visibleColors.map((c) => (
+                    <span
+                      key={c}
+                      style={{
+                        background: "#f0f0f0",
+                        color: "#555",
+                        fontSize: 10,
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                      }}
+                    >
+                      {c}
+                    </span>
+                  ))}
+                  {extraColors > 0 && (
+                    <span
+                      style={{
+                        background: "#e8e8e8",
+                        color: "#888",
+                        fontSize: 10,
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                      }}
+                    >
+                      +{extraColors}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      /* ── StatsBar ── */
+      function StatsBar({ items }) {
+        const count = items.length;
+        const avgDiscount =
+          count > 0
+            ? Math.round(items.reduce((s, i) => s + i.discount, 0) / count)
+            : 0;
+        const maxSaved = count > 0 ? Math.max(...items.map(saved)) : 0;
+
+        return (
+          <div
+            style={{
+              display: "flex",
+              gap: 24,
+              padding: "10px 0",
+              fontSize: 13,
+              color: "#555",
+              flexWrap: "wrap",
+            }}
+          >
+            <span>
+              共 <strong style={{ color: "#1a1a2e" }}>{count}</strong> 件商品
+            </span>
+            <span>
+              平均折扣{" "}
+              <strong style={{ color: "#e53e3e" }}>{avgDiscount}%</strong>
+            </span>
+            <span>
+              最高省下{" "}
+              <strong style={{ color: "#38a169" }}>{fmt(maxSaved)}</strong>
+            </span>
+          </div>
+        );
+      }
+
+      /* ── App ── */
+      function App() {
+        const [data, setData] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        const [brandTab, setBrandTab] = useState("all");
+        const [category, setCategory] = useState("all");
+        const [sort, setSort] = useState("discount");
+        const [query, setQuery] = useState("");
+        const [favs, setFavs] = useState(() => {
+          try {
+            return new Set(
+              JSON.parse(localStorage.getItem("sale_favs") || "[]"),
+            );
+          } catch {
+            return new Set();
+          }
+        });
+
+        useEffect(() => {
+          fetch("data/all_sale.json")
+            .then((r) => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+            })
+            .then((d) => {
+              setData(d);
+              setLoading(false);
+            })
+            .catch((e) => {
+              setError(e.message);
+              setLoading(false);
+            });
+        }, []);
+
+        const toggleFav = (url) => {
+          setFavs((prev) => {
+            const next = new Set(prev);
+            next.has(url) ? next.delete(url) : next.add(url);
+            localStorage.setItem("sale_favs", JSON.stringify([...next]));
+            return next;
+          });
+        };
+
+        /* last scraped timestamp */
+        const lastUpdated =
+          data.length > 0
+            ? new Date(
+                Math.max(...data.map((d) => new Date(d.scrapedAt).getTime())),
+              )
+            : null;
+
+        /* brand counts — computed directly */
+        const brandCounts = {
+          all: data.length,
+          uniqlo: data.filter((d) => d.brand === "uniqlo").length,
+          net: data.filter((d) => d.brand === "net").length,
+        };
+
+        /* categories for current brand tab — computed directly */
+        const pool =
+          brandTab === "all" ? data : data.filter((d) => d.brand === brandTab);
+        const categories = [
+          "all",
+          ...Array.from(new Set(pool.map((d) => d.category))).sort(),
+        ];
+
+        /* filtered + sorted — computed directly */
+        let filtered =
+          brandTab === "all" ? data : data.filter((d) => d.brand === brandTab);
+        if (category !== "all")
+          filtered = filtered.filter((d) => d.category === category);
+        if (query.trim()) {
+          const q = query.trim().toLowerCase();
+          filtered = filtered.filter((d) => d.name.toLowerCase().includes(q));
+        }
+        if (sort === "discount")
+          filtered = [...filtered].sort(
+            (a, b) =>
+              b.discount - a.discount ||
+              b.originalPrice - b.salePrice - (a.originalPrice - a.salePrice),
+          );
+        else if (sort === "price_asc")
+          filtered = [...filtered].sort(
+            (a, b) => a.salePrice - b.salePrice || b.discount - a.discount,
+          );
+        else if (sort === "price_desc")
+          filtered = [...filtered].sort(
+            (a, b) => b.salePrice - a.salePrice || b.discount - a.discount,
+          );
+
+        /* ── layout styles ── */
+        const headerStyle = {
+          background: "#fff",
+          borderBottom: "1px solid #ebebeb",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+        };
+
+        const tabStyle = (active) => ({
+          padding: "10px 18px",
+          border: "none",
+          borderBottom: active ? "2px solid #1a1a2e" : "2px solid transparent",
+          background: "none",
+          cursor: "pointer",
+          fontWeight: active ? 700 : 400,
+          fontSize: 14,
+          color: active ? "#1a1a2e" : "#777",
+          transition: "color .15s",
+        });
+
+        const selectStyle = {
+          padding: "7px 12px",
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          background: "#fff",
+          fontSize: 13,
+          cursor: "pointer",
+          outline: "none",
+        };
+
+        const inputStyle = {
+          padding: "7px 12px",
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          fontSize: 13,
+          outline: "none",
+          width: 200,
+        };
+
+        if (loading)
+          return (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "60vh",
+                flexDirection: "column",
+                gap: 16,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  border: "4px solid #eee",
+                  borderTop: "4px solid #1a1a2e",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+              <span style={{ color: "#888" }}>載入資料中…</span>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          );
+
+        if (error)
+          return (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "60vh",
+                flexDirection: "column",
+                gap: 12,
+                color: "#e53e3e",
+              }}
+            >
+              <span style={{ fontSize: 36 }}>!</span>
+              <strong>載入失敗</strong>
+              <span style={{ fontSize: 13, color: "#888" }}>{error}</span>
+            </div>
+          );
+
+        return (
+          <div>
+            {/* header */}
+            <div style={headerStyle}>
+              <div
+                style={{ maxWidth: 1280, margin: "0 auto", padding: "0 20px" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "14px 0 0",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 2 }}
+                  >
+                    <h1 style={{ fontSize: 20, fontWeight: 800 }}>
+                      特價追蹤器
+                    </h1>
+                    {lastUpdated && (
+                      <span style={{ fontSize: 11, color: "#aaa" }}>
+                        資料更新：
+                        {lastUpdated.toLocaleString("zh-TW", {
+                          month: "numeric",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{ display: "flex", gap: 10, alignItems: "center" }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="搜尋商品名稱…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      style={inputStyle}
+                    />
+                    <select
+                      value={sort}
+                      onChange={(e) => setSort(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="discount">折扣最高</option>
+                      <option value="price_asc">價格低 → 高</option>
+                      <option value="price_desc">價格高 → 低</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* brand tabs */}
+                <div style={{ display: "flex", gap: 0, marginTop: 4 }}>
+                  {[
+                    ["all", "全部"],
+                    ["uniqlo", "UNIQLO"],
+                    ["net", "NET"],
+                  ].map(([val, label]) => (
+                    <button
+                      key={val}
+                      style={tabStyle(brandTab === val)}
+                      onClick={() => {
+                        setBrandTab(val);
+                        setCategory("all");
+                      }}
+                    >
+                      {label}
+                      <span
+                        style={{ marginLeft: 4, fontSize: 11, color: "#aaa" }}
+                      >
+                        ({brandCounts[val]})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* category filter — sticky so always visible */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    flexWrap: "nowrap",
+                    overflowX: "auto",
+                    padding: "8px 0 10px",
+                    borderTop: "1px solid #f0f0f0",
+                    marginTop: 4,
+                    scrollbarWidth: "none",
+                  }}
+                >
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategory(cat)}
+                      style={{
+                        padding: "4px 12px",
+                        border: "1px solid",
+                        borderColor: category === cat ? "#1a1a2e" : "#ddd",
+                        borderRadius: 20,
+                        background: category === cat ? "#1a1a2e" : "#fff",
+                        color: category === cat ? "#fff" : "#555",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        fontWeight: category === cat ? 600 : 400,
+                        transition: "all .15s",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {cat === "all" ? "全部類別" : cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* main */}
+            <div
+              style={{
+                maxWidth: 1280,
+                margin: "0 auto",
+                padding: "0 20px 40px",
+              }}
+            >
+              {/* stats */}
+              <StatsBar items={filtered} />
+
+              {/* grid or empty */}
+              {filtered.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "80px 0",
+                    color: "#aaa",
+                  }}
+                >
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>?</div>
+                  <div style={{ fontSize: 16 }}>找不到符合條件的商品</div>
+                  <div style={{ fontSize: 13, marginTop: 6 }}>
+                    試著調整搜尋條件或篩選
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(230px, 1fr))",
+                    gap: 20,
+                    paddingTop: 8,
+                  }}
+                >
+                  {filtered.map((item) => (
+                    <ProductCard
+                      key={item.imageUrl || item.productUrl + item.name}
+                      item={item}
+                      isFav={favs.has(item.productUrl)}
+                      onToggleFav={toggleFav}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
