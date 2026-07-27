@@ -9,6 +9,7 @@ from pathlib import Path
 # Allow running from project root without installing the package
 sys.path.insert(0, str(Path(__file__).parent))
 
+import tracking
 from scrapers import net_scraper, uniqlo_scraper
 
 logging.basicConfig(
@@ -53,6 +54,9 @@ def main() -> None:
     print(f"合計   : {len(all_products):>4} 件  ({total_secs:.1f}s)")
     print(f"輸出   : {all_path}")
     print("=" * 50)
+
+    # 更新價格歷史 + 檢查 watchlist 警示（升級：關注商品達標/降價提醒）
+    tracking.process(all_products)
 
 
 if __name__ == "__main__":

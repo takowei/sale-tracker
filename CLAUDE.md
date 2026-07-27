@@ -37,9 +37,27 @@ data/
   net_sale.json          ← NET 原始輸出
   scraper.log            ← 最近一次執行日誌
 index.html               ← 前端（React JSX，目前用 PLACEHOLDER_ITEMS）
-n8n_workflow.json        ← n8n 排程 workflow（匯入 n8n 即可）
+n8n_workflow.json        ← n8n 排程 workflow（n8n 未裝，目前不可用）
 sale-tracker-plan.md     ← 完整開發計畫書（詳細 Phase 規劃）
+watchlist.json           ← 【新】你關注的關鍵字+目標價（自行編輯）
+tracking.py              ← 【新】價格歷史 + watchlist 警示（run_scrapers 自動呼叫）
+data/price-history.json  ← 【新】每件商品逐日 salePrice（偵測降價用）
+data/alerts.json         ← 【新】關注商品達標/降價警示（前端 🔔 橫幅讀這個）
 ```
+
+## 關注警示（2026-06-23 新增）
+
+編輯 `watchlist.json`（關鍵字 + 目標價），跑 `python run_scrapers.py` 後：
+更新價格歷史 → 比對你的關注 → 達標（≤目標價）或降價的商品寫進 `data/alerts.json`，
+前端最上方顯示 🔔 橫幅。`max_price` 設 `null` = 只要在特價就提醒。
+
+```json
+[{ "keyword": "束口褲", "max_price": 800, "note": "命中商品名/分類即觸發" }]
+```
+
+**待 Root（要完整自動推播才需要）**：① 手機/Telegram 推播需 bot token（給我就接上）；
+② 每日自動跑需排程（n8n 未裝 → 用 cron / Claude schedule；本機關機時不跑）。
+目前：手動跑 `python run_scrapers.py`，警示進 UI + alerts.json。
 
 ## 資料格式
 

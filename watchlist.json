@@ -1,0 +1,13 @@
+[
+  {
+    "keyword": "束口褲",
+    "max_price": 800,
+    "note": "範例：改成你真正想要的。命中商品名/分類即觸發"
+  },
+  { "keyword": "UT", "max_price": 390, "note": "印花T，達到此價或更低就警示" },
+  {
+    "keyword": "外套",
+    "max_price": 1000,
+    "note": "max_price 設 null 則只要在特價就提醒"
+  }
+]

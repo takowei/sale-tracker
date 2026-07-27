@@ -4,3 +4,5 @@ __pycache__/
 .env
 *.log
 .venv/
+telegram_config.json
+data/alerts_sent.json
