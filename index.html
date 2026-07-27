@@ -342,11 +342,88 @@
         );
       }
 
+      /* ── AlertBanner: 關注商品達標/降價提醒 ── */
+      function AlertBanner({ alerts }) {
+        if (!alerts || alerts.length === 0) return null;
+        return (
+          <div
+            style={{
+              background: "#fffbea",
+              border: "1px solid #f6c343",
+              borderRadius: 12,
+              padding: "14px 16px",
+              margin: "16px 0",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: 15,
+                marginBottom: 8,
+                color: "#8a6d00",
+              }}
+            >
+              🔔 你的關注 — {alerts.length} 筆達標/降價
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {alerts.map((a, i) => (
+                <div
+                  key={i}
+                  onClick={() =>
+                    a.productUrl &&
+                    window.open(a.productUrl, "_blank", "noopener")
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      background: BRAND_COLOR[a.brand] || "#555",
+                      color: "#fff",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      borderRadius: 4,
+                      padding: "1px 6px",
+                    }}
+                  >
+                    {BRAND_LABEL[a.brand] || a.brand}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: 280,
+                    }}
+                  >
+                    {a.name}
+                  </span>
+                  <span style={{ color: "#e53e3e", fontWeight: 700 }}>
+                    NT$ {a.salePrice}
+                  </span>
+                  <span style={{ color: "#8a6d00", fontSize: 12 }}>
+                    {(a.reasons || []).join("｜")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
       /* ── App ── */
       function App() {
         const [data, setData] = useState([]);
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState(null);
+        const [alerts, setAlerts] = useState([]);
 
         const [brandTab, setBrandTab] = useState("all");
         const [category, setCategory] = useState("all");
@@ -376,6 +453,13 @@
               setError(e.message);
               setLoading(false);
             });
+        }, []);
+
+        useEffect(() => {
+          fetch("data/alerts.json")
+            .then((r) => (r.ok ? r.json() : { alerts: [] }))
+            .then((d) => setAlerts(d.alerts || []))
+            .catch(() => setAlerts([]));
         }, []);
 
         const toggleFav = (url) => {
@@ -646,6 +730,9 @@
                 padding: "0 20px 40px",
               }}
             >
+              {/* 關注警示 */}
+              <AlertBanner alerts={alerts} />
+
               {/* stats */}
               <StatsBar items={filtered} />
 
