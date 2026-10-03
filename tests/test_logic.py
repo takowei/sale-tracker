@@ -427,3 +427,70 @@ def test_notify_telegram_empty_alerts_returns_zero(tmp_path: Path):
         count = notify_telegram([])
 
     assert count == 0
+
+
+def _alert(n: int, image: str | None = "https://img/x.jpg") -> dict:
+    return {
+        "productUrl": f"https://example.com/p/{n}",
+        "salePrice": 290,
+        "originalPrice": 490,
+        "brand": "uniqlo",
+        "name": f"T{n}",
+        "imageUrl": image,
+        "sizes": ["M", "L"],
+        "reasons": ["達標：$290"],
+    }
+
+
+def test_notify_telegram_one_photo_per_alert(tmp_path: Path):
+    from tracking import notify_telegram
+
+    calls = []
+    with (
+        patch("tracking.SENT_FILE", tmp_path / "sent.json"),
+        patch("tracking._load_telegram", return_value=("tok", "999")),
+        patch(
+            "tracking._telegram_call",
+            side_effect=lambda t, m, p: calls.append((m, p)) or True,
+        ),
+    ):
+        count = notify_telegram([_alert(1), _alert(2)], pause=0)
+
+    assert count == 2
+    assert [m for m, _ in calls] == ["sendPhoto", "sendPhoto"]
+    assert "1/2" in calls[0][1]["caption"] and "M/L" in calls[0][1]["caption"]
+
+
+def test_notify_telegram_broken_image_falls_back_to_text(tmp_path: Path):
+    from tracking import notify_telegram
+
+    def fake_call(token, method, payload):
+        if method == "sendPhoto":
+            raise OSError("bad image")
+        return True
+
+    with (
+        patch("tracking.SENT_FILE", tmp_path / "sent.json"),
+        patch("tracking._load_telegram", return_value=("tok", "999")),
+        patch("tracking._telegram_call", side_effect=fake_call),
+    ):
+        count = notify_telegram([_alert(1)], pause=0)
+
+    assert count == 1
+
+
+def test_notify_telegram_caps_per_run_and_leaves_rest_unsent(tmp_path: Path):
+    from tracking import MAX_PUSH_PER_RUN, notify_telegram
+
+    sent_file = tmp_path / "sent.json"
+    with (
+        patch("tracking.SENT_FILE", sent_file),
+        patch("tracking._load_telegram", return_value=("tok", "999")),
+        patch("tracking._telegram_call", return_value=True),
+    ):
+        count = notify_telegram(
+            [_alert(n) for n in range(MAX_PUSH_PER_RUN + 5)], pause=0
+        )
+
+    assert count == MAX_PUSH_PER_RUN
+    assert len(json.loads(sent_file.read_text(encoding="utf-8"))) == MAX_PUSH_PER_RUN

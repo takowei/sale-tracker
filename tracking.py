@@ -17,8 +17,10 @@ channel credential from Root — see deliver_note(). Logic works with zero exter
 
 from __future__ import annotations
 
+import html
 import json
 import os
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -132,6 +134,7 @@ def check_watchlist(
                         "discount": it.get("discount"),
                         "productUrl": it.get("productUrl"),
                         "imageUrl": it.get("imageUrl"),
+                        "sizes": it.get("sizes") or [],
                         "reasons": reasons,
                         "date": today,
                     }
@@ -169,41 +172,83 @@ def _load_sent() -> set[str]:
     return set()
 
 
-def notify_telegram(alerts: list[dict]) -> int:
-    """Push NEW alerts (not previously sent at this price) to Telegram. Returns sent count.
-    No-op (returns 0) when unconfigured or nothing new."""
+MAX_PUSH_PER_RUN = 30  # 超過的留到下一輪（未標記已送），避免一次洗版
+
+
+def _telegram_call(token: str, method: str, payload: dict) -> bool:
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    data = urllib.parse.urlencode(payload).encode()
+    with urllib.request.urlopen(url, data=data, timeout=15) as r:
+        return r.status == 200
+
+
+def _alert_caption(a: dict, idx: int, total: int) -> str:
+    """一圖一則的說明文字（HTML）：序號、特價、原價、品牌＋名稱連結、尺寸、觸發原因。"""
+    orig = a.get("originalPrice")
+    price = f"<b>${a.get('salePrice')}</b>" + (f" <s>{orig}</s>" if orig else "")
+    name = html.escape(a.get("name") or "")
+    link = f'<a href="{html.escape(a.get("productUrl") or "")}">{name}</a>'
+    sizes = "/".join(a.get("sizes") or []) or "-"
+    reasons = html.escape("｜".join(a.get("reasons", [])))
+    brand = (a.get("brand") or "").upper()
+    return f"{idx}/{total}  {price} {brand}\n{link}\n{sizes}\n{reasons}"
+
+
+def _send_alert(token: str, chat: str, caption: str, image_url: str | None) -> bool:
+    """有圖發 sendPhoto，圖片打不開就退回純文字，確保每筆都送得出去。"""
+    if image_url:
+        try:
+            return _telegram_call(
+                token,
+                "sendPhoto",
+                {
+                    "chat_id": chat,
+                    "photo": image_url,
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                },
+            )
+        except Exception:  # noqa: BLE001 — 壞圖退回純文字
+            pass
+    return _telegram_call(
+        token,
+        "sendMessage",
+        {
+            "chat_id": chat,
+            "text": caption,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        },
+    )
+
+
+def notify_telegram(alerts: list[dict], pause: float = 1.2) -> int:
+    """Push NEW alerts (not previously sent at this price) to Telegram, one photo per
+    message. Returns sent count. No-op (returns 0) when unconfigured or nothing new."""
     token, chat = _load_telegram()
     sent = _load_sent()
-    fresh = [a for a in alerts if _alert_key(a) not in sent]
-    if not fresh:
+    fresh_by_key = {_alert_key(a): a for a in alerts if _alert_key(a) not in sent}
+    if not fresh_by_key:
         return 0
     if not (token and chat):
         return 0  # unconfigured: leave fresh unsent so they fire once token is added
-    lines = [f"🔔 衣服關注 {len(fresh)} 筆達標/降價"]
-    for a in fresh[:30]:
-        lines.append(
-            f"• [{a.get('brand')}] {a.get('name')}  NT${a.get('salePrice')}"
-            f"  — {'｜'.join(a.get('reasons', []))}\n  {a.get('productUrl')}"
-        )
-    text = "\n".join(lines)
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    data = urllib.parse.urlencode(
-        {"chat_id": chat, "text": text, "disable_web_page_preview": "true"}
-    ).encode()
-    try:
-        with urllib.request.urlopen(url, data=data, timeout=15) as r:
-            ok = r.status == 200
-    except Exception as exc:  # noqa: BLE001 — best-effort notifier
-        print(f"  ⚠️ Telegram 發送失敗：{exc}")
-        return 0
-    if ok:
+    batch = list(fresh_by_key.items())[:MAX_PUSH_PER_RUN]
+    delivered: set[str] = set()
+    for idx, (key, a) in enumerate(batch, 1):
+        try:
+            if _send_alert(
+                token, chat, _alert_caption(a, idx, len(batch)), a.get("imageUrl")
+            ):
+                delivered.add(key)
+        except Exception as exc:  # noqa: BLE001 — best-effort notifier
+            print(f"  ⚠️ Telegram 發送失敗：{exc}")
+        if idx < len(batch):
+            time.sleep(pause)
+    if delivered:
         SENT_FILE.write_text(
-            json.dumps(
-                sorted(sent | {_alert_key(a) for a in fresh}), ensure_ascii=False
-            ),
-            encoding="utf-8",
+            json.dumps(sorted(sent | delivered), ensure_ascii=False), encoding="utf-8"
         )
-    return len(fresh) if ok else 0
+    return len(delivered)
 
 
 def process(items: list[dict]) -> list[dict]:
