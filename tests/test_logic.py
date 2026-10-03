@@ -81,8 +81,7 @@ def test_parse_product_basic_fields():
     assert result["category"] == "男裝特價"
     assert result["scrapedAt"] == "2026-06-20T00:00:00Z"
     # mainPic test/ → / replacement
-    assert "test" not in result["imageUrl"]
-    assert result["imageUrl"].startswith("https://www.uniqlo.com")
+    assert result["imageUrl"] == "https://www.uniqlo.com/tw/hmall/test/p1.jpg"
 
 
 def test_parse_product_zero_price_gives_zero_discount():

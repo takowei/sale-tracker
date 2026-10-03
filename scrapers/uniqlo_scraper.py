@@ -18,6 +18,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 API_URL = "https://d.uniqlo.com/tw/p/search/products/by-category"
+IMAGE_HOST = "https://www.uniqlo.com/tw"
 
 HEADERS = {
     "accept": "application/json",
@@ -106,8 +107,9 @@ def _parse_product(
     sizes = [SIZE_MAP.get(s, s) for s in raw.get("size", [])]
     colors = _parse_colors(raw.get("styleText", []))
 
-    main_pic = raw.get("mainPic", "").replace("/hmall/test/", "/hmall/")
-    image_url = f"https://www.uniqlo.com{main_pic}" if main_pic else ""
+    # mainPic 原樣接在 /tw 底下才拿得到圖（2026-10-03 實測：去掉 /test/ 或少了 /tw 都 404）
+    main_pic = raw.get("mainPic", "")
+    image_url = f"{IMAGE_HOST}{main_pic}" if main_pic else ""
     product_url = f"https://www.uniqlo.com/tw/zh_TW/product-detail.html?productCode={product_code}"
 
     return {
