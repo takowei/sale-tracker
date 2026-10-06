@@ -6,3 +6,7 @@ __pycache__/
 .venv/
 telegram_config.json
 data/alerts_sent.json
+
+# local AI-assistant notes and settings
+CLAUDE.md
+.claude/
