@@ -10,3 +10,6 @@ data/alerts_sent.json
 # local AI-assistant notes and settings
 CLAUDE.md
 .claude/
+
+# vendored third-party packages for local runs; CI installs requirements.txt
+.pylibs/
